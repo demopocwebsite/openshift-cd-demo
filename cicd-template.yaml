@@ -114,7 +114,7 @@ objects:
               }
               stage('Archive App') {
                 steps {
-                  sh "${mvnCmd} deploy -DskipTests=true -X -P nexus3"
+                  sh "${mvnCmd} deploy -DskipTests=true -X -P nexus"
                 }
               }
               stage('Build Image') {
