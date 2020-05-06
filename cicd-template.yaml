@@ -280,6 +280,9 @@ objects:
             oc label dc jenkins app=jenkins --overwrite 
 
             # setup dev env
+            #### make sure you do a docker login registry.access.redhat.com
+            ### so that the credential will be stored in  /your-login-id/.docker/config.json , e.g.  /root/.docker/config.json if login as root.
+            ### the next command will use that credential to pull down the image
             oc import-image openjdk/openjdk-11-rhel7 --from=registry.access.redhat.com/openjdk/openjdk-11-rhel7 --confirm -n ${DEV_PROJECT} 
             
             if [ "${ENABLE_QUAY}" == "true" ] ; then
@@ -289,7 +292,7 @@ objects:
               
               # dev
               oc create secret docker-registry quay-cicd-secret --docker-server=quay.io --docker-username="${QUAY_USERNAME}" --docker-password="${QUAY_PASSWORD}" --docker-email=cicd@redhat.com -n ${DEV_PROJECT}
-              oc new-build --name=swagger-tasks --image-stream=wildfly:latest --binary=true --push-secret=quay-cicd-secret --to-docker --to='quay.io/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest' -n ${DEV_PROJECT}
+              oc new-build --name=swagger-tasks --image-stream=openjdk-11-rhel7:latest --binary=true --push-secret=quay-cicd-secret --to-docker --to='quay.io/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest' -n ${DEV_PROJECT}
               oc new-app --name=swagger-tasks --docker-image=quay.io/${QUAY_USERNAME}/${QUAY_REPOSITORY}:latest --allow-missing-images -n ${DEV_PROJECT}
               oc set triggers dc swagger-tasks --remove-all -n ${DEV_PROJECT}
               oc patch dc swagger-tasks -p '{"spec": {"template": {"spec": {"containers": [{"name": "swagger-tasks", "imagePullPolicy": "Always"}]}}}}' -n ${DEV_PROJECT}
@@ -305,7 +308,7 @@ objects:
               oc secrets link default quay-cicd-secret --for=pull -n ${STAGE_PROJECT}
             else
               # dev
-              oc new-build --name=swagger-tasks --image-stream=openjdk/openjdk-11-rhel7:latest --binary=true -n ${DEV_PROJECT}
+              oc new-build --name=swagger-tasks --image-stream=openjdk-11-rhel7:latest --binary=true -n ${DEV_PROJECT}
               oc new-app swagger-tasks:latest --allow-missing-images -n ${DEV_PROJECT}
               oc set triggers dc -l app=swagger-tasks --containers=swagger-tasks --from-image=swagger-tasks:latest --manual -n ${DEV_PROJECT}
               
@@ -322,8 +325,10 @@ objects:
             # dev project
             oc expose dc/swagger-tasks --port=8080 -n ${DEV_PROJECT}
             oc expose svc/swagger-tasks -n ${DEV_PROJECT}
-            oc set probe dc/swagger-tasks --readiness --get-url=http://:8080/ws/demo/healthcheck --initial-delay-seconds=30 --failure-threshold=10 --period-seconds=10 -n ${DEV_PROJECT}
-            oc set probe dc/swagger-tasks --liveness  --get-url=http://:8080/ws/demo/healthcheck --initial-delay-seconds=180 --failure-threshold=10 --period-seconds=10 -n ${DEV_PROJECT}
+            
+            #### make sure this probe is correct that it will returns HTTP status 200, else the OpenShift route to this will not up if status is not 200, e.g. 404
+            oc set probe dc/swagger-tasks --readiness --get-url=http://:8080/swagger-ui.html --initial-delay-seconds=30 --failure-threshold=10 --period-seconds=10 -n ${DEV_PROJECT}
+            oc set probe dc/swagger-tasks --liveness  --get-url=http://:8080/swagger-ui.html --initial-delay-seconds=180 --failure-threshold=10 --period-seconds=10 -n ${DEV_PROJECT}
             oc rollout cancel dc/swagger-tasks -n ${STAGE_PROJECT}
 
             # stage project
