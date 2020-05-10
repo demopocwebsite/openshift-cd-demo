@@ -290,9 +290,10 @@ objects:
             oc label dc jenkins app=jenkins --overwrite 
 
             # setup dev env
-            #### make sure you do a docker login registry.access.redhat.com
+            #### make sure you do a docker login registry.access.redhat.com and also docker login ${HARBOR_URL}
             ### so that the credential will be stored in  /your-login-id/.docker/config.json , e.g.  /root/.docker/config.json if login as root.
             ### the next command will use that credential to pull down the image
+            
             oc import-image openjdk/openjdk-11-rhel7 --from=registry.access.redhat.com/openjdk/openjdk-11-rhel7 --confirm -n ${DEV_PROJECT} 
             
             if [ "${ENABLE_HARBOR}" == "true" ] ; then
