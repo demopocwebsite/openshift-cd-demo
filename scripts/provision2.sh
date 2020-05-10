@@ -170,7 +170,7 @@ function deploy() {
 
   sleep 2
 
-  local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-template.yaml
+  local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-template2.yaml
   echo "Using template $template"
   oc $ARG_OC_OPS new-app -f $template -p DEV_PROJECT=dev-$PRJ_SUFFIX -p STAGE_PROJECT=stage-$PRJ_SUFFIX -p EPHEMERAL=$ARG_EPHEMERAL -p ENABLE_HARBOR=$ARG_ENABLE_HARBOR -p HARBOR_USERNAME=$ARG_HARBOR_USER -p HARBOR_PASSWORD=$ARG_HARBOR_PASS -n cicd-$PRJ_SUFFIX 
 }
