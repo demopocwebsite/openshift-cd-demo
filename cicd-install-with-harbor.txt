@@ -1,0 +1,344 @@
+
+Step 0 , oc login ..... , get this from the web console to login
+
+
+Take note during the step 1 provision , it pulls an image openjdk from redhat registry which requires userid/password access, u need to
+registry access to the redhat registry
+
+Before you execute the shell (provision.sh or provision2.sh) , at your Linux client shell , do
+
+docker login registry.access.redhat.com
+
+
+git clone https://github.com/teohunboon/openshift-cd-demo.git
+
+(if u are using harbor for registry) 
+Go to scripts/provision2.sh 
+
+chmod u+x provision2.sh to make it exeutive shell scripts/provision2
+
+Edit provision2.sh , look for :
+  local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-template2.yaml
+
+change template=../cicd-template2.yaml 
+
+next open cicd-template2.yaml ,
+look for :
+- displayName: Harbor URL 
+  description: Integrate image build and deployment with Harbor
+  value: "harbor-route-cicd-demo.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud"
+  name: HARBOR_URL
+
+See the URL is required.
+
+create project with   oc cicd-demopoc    (take note demopoc will be the project suffix when u do the step 1 provision , --project-suffice demopoc  , it will go into cicd-demopoc)
+
+(the reason is that harbor wasn't an option initially for me to setup, i use the openshift internal registry )
+So we need to install Harbor first to get the URL go to step 4 Helm install with Harbor , complete step 4 to step 8 before starting step 1
+
+Once completed Helm/Harbor install and verify ok, copy the URL and put into the value field  in your local cicd-template2.yaml file
+
+
+
+
+step 1 :
+
+//// take note this one this one quay.io option not tested after modified from the original
+/// https://github.com/siamaksade/openshift-cd-demo
+run ./provision.sh deploy --project-suffix demopoc
+
+/// this one use Harbor for the registry instead of Quay.io
+//// u need to install Harbor follwing the steps below
+////    --enable-harbor              Optional    Enable integration of build and deployments with harbor.io"
+    echo "   --harbor-username            Optional    harbor.io username to push the images to a harbor.io account. Required if --enable-harbor is set"
+    echo "   --harbor-password            Optional    harbor.io password to push the images to a harbor.io account. Required if --enable-harbor is set"
+///
+//// with harbor as registry - , make sure u use a long password , min. 12 i think , with uppercase and lowercase with numeric, because later when u create the user in harbor, password too short or no uppercase and lowercase with numeric  can't create
+/// so use something like DemoPOC12345 
+/// run  the following : ./provision2.sh deploy --project-suffix demopoc --enable-harbor   --harbor-username developer --harbor-password P@sswor0d12345678
+/// 
+////  after harbor is installed in the steps stated below , create a repository demopoc (need this name because the pipeline in cicd-template2.yaml use this name) with this user name and password 
+
+
+//// following use internal OCP registry , no harbor integration with container image scan.
+
+run ./provision2.sh deploy --project-suffix demopoc
+
+Step 2
+if Nexus newest version : (just try to login nexus , key in password admin/admin123 , if can't login, that means u need to do the dollowing:
+go to the OCP console and open terminal for the nexus pod
+Copy the password from /opt/sonatype/sonatype-work/nexus3/admin.password file
+
+Login the Nexus and follow the step to step to set the new admin password to admin123
+Next Create a new maven-all-public repository with group type.
+adde the following members for this maven repository group:
+maven-snapshots
+maven-releases
+maven-central
+
+
+Note: don't do this until you have installed Harbor below
+if you set a different password for admin ,e.g. DemoPOC@ , before run the build , access gogs (git compatible scm), access the spring-boot-swagger-jpa-2 project.
+open configuration cicd-settings-nexus3.xml , change the password to DemoPOC@
+
+Note that after the change and commit , it will automatically start the build (
+
+Step 4 Install Helm  ( this done before Step 1 hahaha)
+-------- Helm installation  ----
+https://computingforgeeks.com/install-harbor-image-registry-on-kubernetes-openshift-with-helm-chart/
+ 1: Install Helm 3 on Linux / macOS
+--- Linux ---
+sudo curl -L https://mirror.openshift.com/pub/openshift-v4/clients/helm/latest/helm-linux-amd64 -o /usr/local/bin/helm
+sudo chmod +x /usr/local/bin/helm
+
+ 2: Install Harbor Helm Chart on Kubernetes / OpenShift Cluster
+A Chart is a Helm package. It contains all of the resource definitions necessary to run an application, tool, or service inside of a Kubernetes cluster.
+Add Harbor Helm repository:
+
+$ helm repo add harbor https://helm.goharbor.io
+"harbor" has been added to your repositories
+Update the repository:
+
+helm fetch harbor/harbor --untar
+
+3. before proceeed , create redis in your project , in this case cicd-demopoc
+service name : harbor-redis
+password : redis@
+
+4. create postgresql under the project cicd-demopoc with 
+service name : harbor-postgresql
+user: harbor
+password : harbor@
+db : registry
+
+Once the postgresql is up , open the terminal from the console , or do a oc rsh postgresql-xxxx  (use oc get pod to get the pod name of postgresql)
+issue : psql and at the prompt, run the following
+
+create database clair owner harbor;
+create database notary_server owner harbor;
+create database notary_signer owner harbor;
+
+\l    <---- this command list the database
+
+
+\q  <--- quit to command line
+
+do psql -h harbor-postgresql -p 5432 -U harbor -d registry to verify password ok
+
+do a 
+curl -v harbor-postgresql:5432  (should see connection but say empty reply, that's mean ok)
+do a
+curl -v harbor-redis:6379   ( should see connected etc... some error and still connectd, ctrl-c to break connection)
+
+------ this step is because , i don't know how to get a external defined DNS name for the harbor external DNS name since i do not have a DNS to allocate the dns name
+
+Super important for changing the values.yaml file for the harbor installation
+The externalURL DONT put http  , must be https  if not , harbor installed every seems ok , later u can't push the image to harbor
+create 2 http apache server  on project cicd-demopoc (take note i am doing this is because up-front i do not have a valid DNS URL and harbor require it for helm install):
+http-example
+http-exmaple2
+
+After the above are created ,
+create the following to 2 routes:
+1.
+harbor-route 
+service -> http-example service
+8080->8080
+choose secure
+choose edge (not pass-through or re-encrypt)
+
+2.
+harbor-route 
+service -> http-example2 service
+8080->8080
+choose secure
+choose edge (not pass-through or re-encrypt)
+
+Check and copy the 2 external location of these 2 routes which look something like :
+harbor-route-cicd-demo.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud
+harbor-route2-cicd-demo.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud
+
+
+---
+harbor-route-harbor.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud
+harbor-route2-harbor.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud
+------ from email , lession:
+  * Harbor is the most challenging part when I have don't have the a allocated external domain name (maybe there is a way to do this in OCP but I don't ) (e.g. a valid dns name like harbor.mydomain.com ) to begin the installation as it is using Helm to do the installation and the before you start , this dns name is expected,  In addition, if you put in in one of the config external url :
+externalURL: http://harbor-route-cicd-demo.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud
+you forgot to put as https ,   everything will seems to work correctly except when you try to do a docker push the image, it will just give your authorization 401, you need to before Helm installation , set this to https else whatever is deployed , it will seem to work but docker push will fail.
+Next is the challenge that the CA of harbor is self-signed and when you push to the Harbor Pod , you will encounter CA unknow error which OCP has the documentation stating how to add this to OCP using the oc command. This is the part that will impact those who use the Windows version of oc command for the issue of oc patch (it will always give a JSON syntax error) ... and after spending sometime google , someone commented that you must be crazy to use the Windows version of the oc, true enough when I use the oc version under Ubuntun to issue the command , it work. So lesson is if the oc command failed in Windows, try Linux version, it may solve your problem.
+
+Go into harbor ,login in and download its self-signed CA certificate:
+
+
+----
+
+
+Step 5 associate admin scc to our project cicd-demo 
+Next create a admin scc (security context), the helm install of harbor , the pod somehow is using fsgroup : 10000 , which if you do this step, it will fail to create the pod 
+oc project cicd-demo
+
+create a scc-admin.yaml with the folloing setting:
+
+kind: SecurityContextConstraints
+apiVersion: v1
+metadata:
+  name: scc-admin
+allowPrivilegedContainer: true
+runAsUser:
+  type: RunAsAny
+seLinuxContext:
+  type: RunAsAny
+fsGroup:
+  type: RunAsAny
+supplementalGroups:
+  type: RunAsAny
+users:
+- my-admin-user
+groups:
+- my-admin-group
+
+
+----------------------------
+then run 
+oc create -f scc-admin.yaml
+ 
+ then associate our project cicd-demopoc service account with this security context
+oc adm policy add-scc-to-user  scc-admin -z default
+oc adm policy add-scc-to-user  scc-admin -z builder
+oc adm policy add-scc-to-user  scc-admin -z deployer
+
+Step 6 ,edit values.yml for harbor
+Open the harbor/values.html (remembe you did a helm fetch harbor/harbor --untar which fetch harbor directory with all the files)
+
+THe 2 routes that you copy earlier , put in to the ingress 
+  ingress:
+    hosts:
+      core: harbor-route-cicd-demopoc.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud
+      notary: harbor-route2-cicd-demopoc.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud
+
+change externalURL same as the core:  (make sure it is https , if you put http , everything seems working but actually it is not working from external)   
+externalURL: https://harbor-route-cicd-demopoc.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud
+
+Put database and redis as external
+database:
+  # if external database is used, set "type" to "external"
+  # and fill the connection informations in "external" section
+  type: external
+  
+    host: "harbor-postgresql"
+    port: "5432"
+    username: "harbor"
+    password: "harbor@"
+
+redis:
+  # if external Redis is used, set "type" to "external"
+  # and fill the connection informations in "external" section
+  type: external
+
+
+  external:
+    host: "harbor-redis"
+    port: "6379"
+    password: "redis@"
+
+
+Step 7 , run the helm to install harbor
+
+run :
+helm install my-release harbor     (my-release seem to be important , if give other value, deployment has issue , harbor is the path to harbor directory path)
+
+
+
+login using admin/Harbor12345 , create the username/password that u in previous step 1 that u setup , create a repository demopoc
+
+
+Step 8 , add the harbor CA self-signed certificate to OCP 4.x cluster
+Login to harbor and download the Root CA certificate ,save as harbor-ca.crt 
+
+Put the file harbor-ca.crt in your current folder location (or some place that later u need to put to when executing the command) 
+Find the actual DNS name of harbor , e.g. harbor-route-cicd-demo.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud , see below 
+
+
+Issue the following, make sure replacr the DNS name u found above for the followig command
+oc create configmap registry-cas1 -n openshift-config --from-file=harbor-route-cicd-demo.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud..443=harbor-ca.crt --from-file=harbor-route-cicd-demo.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud=harbor-ca.crt
+
+
+Issue :
+----- issue the following command in Linux ----- not windows... because it will give you JSON error 
+
+oc patch image.config.openshift.io/cluster --patch '{"spec":{"additionalTrustedCA":{"name":"registry-cas"}}}' --type=merge
+
+-------------------------------------------------------------------------------
+
+
+Other miscellaneous oc command
+
+oc get node
+
+oc debug nodes/10.116.176.40
+after shell open do chroot /host
+
+
+./provision2.sh  deploy --enable-harbor --harbor-username developer --harbor-password DemoPOC12345 --project-suffix demo
+
+
+Create the Harbor trusted CA self-signed certificate for later the build which need to push to Harbor
+oc create configmap registry-cas -n openshift-config --from-file=myregistry.corp.com..5000=/etc/docker/certs.d/myregistry.corp.com:5000/ca.crt --from-file=otherregistry.com=/etc/docker/certs.d/otherregistry.com/ca.crt
+
+-----  the file harbor-ca.crt on your local path 
+oc create configmap registry-cas1 -n openshift-config --from-file=harbor-route-cicd-demo.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud..443=harbor-ca.crt --from-file=harbor-route-cicd-demo.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud=harbor-ca.crt
+
+----- issue the following command in Linux ----- not windows... because it will give you JSON error 
+oc patch image.config.openshift.io/cluster --patch '{"spec":{"additionalTrustedCA":{"name":"registry-cas"}}}' --type=merge
+
+
+--------------------------------------
+Jira license key:  Server ID	 :  BFI8-BM4Q-N6CX-OOSY    SEN : SEN-L15424625
+
+AAABfQ0ODAoPeNp9kUFPwkAQhe/9FU286GGbtgJRkiZKuyY1tEWKRhMvaxlgDd1tZrco/96lLREVP
+M7szrzvvTnLa2EnbGt7ru36Q98bXg7sMJrZvuu71hIBxEpWFaAz5gUIBXTONZcioOmMTifTOKdWW
+pdvgNniUQGqgHhWKIVmhU5ZCYEGuarFm5TiZlkyvnYKWVrvHJnzZ2xSY7FiCiKmIdjpE7dPPNfql
+GfbCpqVYZYkdBrGt+P9E/2sOG4P5gbEvd5j0MTIHufIATeAcRSM7uIrMkp6DyQdhM8ky/KXFrJCO
+a8L7ewKouRCfzAEx2zlG+MNa2i/nQ7nSITHjBhGoUEwUZww8w/NnyA7HeNrHEc5TcnY6/f83sDvW
+6YKfnb+WZxrhhowWLC1AivDJRNcscZhBKWcZCExTStEaJq/77ZuMZ4M1W7E/5EFGLtYIVddjBGoA
+nnVLL83FHbeUdjn7ZUuXoc23bB13Wi12KfucCzhQ/HDue+dbf0FMgANWzAtAhUAiL+oT4ysPLmBW
+GUMN5esJxOS2mQCFH1bhkOCUUKKmNPBpvnZrno19lHPX02ii
+
+
+
+------------------- setting up Kibana to monitor the container log
+follow this to install cluster logging:
+https://docs.openshift.com/container-platform/4.3/logging/cluster-logging-deploying.html
+
+Get the route:
+
+
+oc get routes -n openshift-logging
+
+
+ kibana-openshift-logging.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud
+ 
+ 
+ ---- remove the cluster logging
+ step 1 remove the instance
+ oc delete clusterlogging instance -n openshift-logging
+ step 2 remove pvc
+ oc delete pvc --all -n openshift-logging
+ 
+ get the storageclass
+ oc get storageclass
+ 
+
+------
+push web site image to docker:
+docker tag demopoc-apache:latest hunboon/demopoc-apache:latest
+docker push hunboon/demopoc-apache:latest
+
+-----
+Error: [object Object]: [security_exception] no permissions for [indices:data/read/field_caps] and User [name=CN=system.logging.kibana,OU=OpenShift,O=Logging, roles=[]]
+system.logging.kibana
+
+https://access.redhat.com/documentation/en-us/openshift_container_platform/4.3/html-single/logging/index
+
+
