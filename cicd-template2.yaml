@@ -309,7 +309,9 @@ objects:
               oc patch dc swagger-tasks -p '{"spec": {"template": {"spec": {"containers": [{"name": "swagger-tasks", "imagePullPolicy": "Always"}]}}}}' -n ${DEV_PROJECT}
               oc delete is swagger-tasks -n ${DEV_PROJECT}
               oc secrets link default harbor-cicd-secret --for=pull -n ${DEV_PROJECT}
-              
+                   #### MYSQL 
+              oc new-app --name mysql -e MYSQL_USER=username -e MYSQL_PASSWORD=Passw0rd -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=users_database mysql:8.0  -n ${DEV_PROJECT}            
+         
               # stage
               oc create secret docker-registry harbor-cicd-secret --docker-server=${HARBOR_URL} --docker-username="${HARBOR_USERNAME}" --docker-password="${HARBOR_PASSWORD}" --docker-email=cicd@redhat.com -n ${STAGE_PROJECT}
               oc new-app --name=swagger-tasks --docker-image=${HARBOR_URL}/${HARBOR_PROJECT}/${HARBOR_REPOSITORY}:stage --allow-missing-images -n ${STAGE_PROJECT}
@@ -317,6 +319,8 @@ objects:
               oc patch dc swagger-tasks -p '{"spec": {"template": {"spec": {"containers": [{"name": "swagger-tasks", "imagePullPolicy": "Always"}]}}}}' -n ${STAGE_PROJECT}
               oc delete is swagger-tasks -n ${STAGE_PROJECT}
               oc secrets link default harbor-cicd-secret --for=pull -n ${STAGE_PROJECT}
+              #### MYSQL 
+              oc new-app --name mysql -e MYSQL_USER=username -e MYSQL_PASSWORD=Passw0rd -e MYSQL_ROOT_PASSWORD=root -e MYSQL_DATABASE=users_database mysql:8.0  -n ${STAGE_PROJECT}            
             else
               # dev
               oc new-build --name=swagger-tasks --image-stream=openjdk-11-rhel7:latest --binary=true -n ${DEV_PROJECT}
