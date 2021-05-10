@@ -35,7 +35,6 @@ parameters:
   required: true
 - displayName: Harbor URL 
   description: Integrate image build and deployment with Harbor
-  value: "harbor-route-cicd-demo.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud"
   name: HARBOR_URL
   required: false
 - displayName: Harbor Project
