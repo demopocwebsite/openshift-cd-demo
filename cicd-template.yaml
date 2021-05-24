@@ -33,6 +33,11 @@ parameters:
   value: "false"
   name: ENABLE_QUAY
   required: true
+- displayName: GitHub Account 
+  description: GitHub Account to Use
+  value: "demopocwebsite"
+  name: GITHUB_ACCOUNT
+  required: false
 - displayName: Quay.io Username
   description: Quay.io username to push the images to tasks-sample-app repository on your Quay.io account
   name: QUAY_USERNAME
@@ -412,7 +417,7 @@ objects:
 
             cat <<EOF > /tmp/data.json
             {
-              "clone_addr": "https://github.com/teohunboon/springboot2-jpa-swagger2.git",
+              "clone_addr": "https://github.com/${GITHUB_ACCOUNT}/springboot2-jpa-swagger2.git",
               "uid": 1,
               "repo_name": "springboot2-jpa-swagger2"
             }
