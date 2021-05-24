@@ -35,7 +35,13 @@ parameters:
   required: true
 - displayName: Harbor URL 
   description: Integrate image build and deployment with Harbor
+  value: "harbor-route-cicd-demo.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud"
   name: HARBOR_URL
+  required: false
+- displayName: GitHub Account 
+  description: GitHub Account to Use
+  value: "demopocwebsite"
+  name: GITHUB_ACCOUNT
   required: false
 - displayName: Harbor Project
   description: Integrate image build and deployment with Harbor Project
@@ -426,7 +432,7 @@ objects:
 
             cat <<EOF > /tmp/data.json
             {
-              "clone_addr": "https://github.com/teohunboon/springboot2-jpa-swagger2.git",
+              "clone_addr": "https://github.com/${GITHUB_ACCOUNT}/springboot2-jpa-swagger2.git",
               "uid": 1,
               "repo_name": "springboot2-jpa-swagger2"
             }
