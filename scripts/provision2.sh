@@ -24,10 +24,12 @@ function usage() {
     echo "   --enable-harbor              Optional    Enable integration of build and deployments with harbor.io"
     echo "   --harbor-username            Optional    harbor.io username to push the images to a harbor.io account. Required if --enable-harbor is set"
     echo "   --harbor-password            Optional    harbor.io password to push the images to a harbor.io account. Required if --enable-harbor is set"
+    echo "   --harbor-url            Optional    harbor.io url to push the images to a harbor.io account. Required if --enable-harbor is set"
     echo "   --user [username]          Optional    The admin user for the demo projects. Required if logged in as system:admin"
     echo "   --project-suffix [suffix]  Optional    Suffix to be added to demo project names e.g. ci-SUFFIX. If empty, user will be used as suffix"
     echo "   --ephemeral                Optional    Deploy demo without persistent storage. Default false"
     echo "   --oc-options               Optional    oc client options to pass to all oc commands e.g. --server https://my.openshift.com"
+    echo "   --github-account           Optional    github-account to run from , default: demopocwebsite"
     echo
 }
 
@@ -40,6 +42,7 @@ ARG_ENABLE_HARBOR=false
 ARG_HARBOR_USER=
 ARG_HARBOR_PASS=
 ARG_HARBOR_URL=harbor-route-cicd-demo.demopoc-3f3db96d75b2acdcc0f2db1d63a4effa-0000.sng01.containers.appdomain.cloud
+ARG_GITHUB_ACCOUNT=demopocwebsite
 
 while :; do
     case $1 in
@@ -71,6 +74,16 @@ while :; do
                 shift
             else
                 printf 'ERROR: "--project-suffix" requires a non-empty value.\n' >&2
+                usage
+                exit 255
+            fi
+            ;;
+        --github-account)
+            if [ -n "$2" ]; then
+                ARG_GITHUB_ACCOUNT=$2
+                shift
+            else
+                printf 'ERROR: "--github-account" requires a non-empty value.\n' >&2
                 usage
                 exit 255
             fi
@@ -108,6 +121,16 @@ while :; do
                 exit 255
             fi
             ;;
+        --harbor-url)
+            if [ -n "$2" ]; then
+                ARG_HARBOR_URL=$2
+                shift
+            else
+                printf 'ERROR: "--harbor-url" requires a non-empty value.\n' >&2
+                usage
+                exit 255
+            fi
+            ;;
         --ephemeral)
             ARG_EPHEMERAL=true
             ;;
@@ -138,7 +161,7 @@ done
 LOGGEDIN_USER=$(oc $ARG_OC_OPS whoami)
 OPENSHIFT_USER=${ARG_USERNAME:-$LOGGEDIN_USER}
 PRJ_SUFFIX=${ARG_PROJECT_SUFFIX:-`echo $OPENSHIFT_USER | sed -e 's/[-@].*//g'`}
-GITHUB_ACCOUNT=${GITHUB_ACCOUNT:-demopocwebsite}
+GITHUB_ACCOUNT=${GITHUB_ACCOUNT:-$ARG_GITHUB_ACCOUNT}
 GITHUB_REF=${GITHUB_REF:-master}
 
 function deploy() {
@@ -172,7 +195,7 @@ function deploy() {
 
   local template=https://raw.githubusercontent.com/$GITHUB_ACCOUNT/openshift-cd-demo/$GITHUB_REF/cicd-template2.yaml
   echo "Using template $template"
-  oc $ARG_OC_OPS new-app -f $template -p DEV_PROJECT=dev-$PRJ_SUFFIX -p STAGE_PROJECT=stage-$PRJ_SUFFIX -p EPHEMERAL=$ARG_EPHEMERAL -p ENABLE_HARBOR=$ARG_ENABLE_HARBOR -p HARBOR_USERNAME=$ARG_HARBOR_USER -p HARBOR_PASSWORD=$ARG_HARBOR_PASS -n cicd-$PRJ_SUFFIX 
+  oc $ARG_OC_OPS new-app -f $template -p DEV_PROJECT=dev-$PRJ_SUFFIX -p STAGE_PROJECT=stage-$PRJ_SUFFIX -p EPHEMERAL=$ARG_EPHEMERAL -p ENABLE_HARBOR=$ARG_ENABLE_HARBOR -p HARBOR_USERNAME=$ARG_HARBOR_USER -p HARBOR_PASSWORD=$ARG_HARBOR_PASS -p HARBOR_URL=$ARG_HARBOR_URL -n cicd-$PRJ_SUFFIX 
 }
 
 function make_idle() {
